@@ -36,8 +36,9 @@ export function LeadGroupDetail({ keyword, location, onBack }: Props) {
     { limit, keyword, location },
     { refetchOnMountOrArgChange: true }
   );
-  const { visibleLeads, emailOnly, setEmailOnly, newOnly, setNewOnly, sortAZ, setSortAZ } = useLeadFilters(
-    data?.leads ?? []
+  const { visibleLeads, emailOnly, setEmailOnly, newOnly, setNewOnly, sortMode, setSortMode } = useLeadFilters(
+    data?.leads ?? [],
+    qualifications
   );
 
   const exportUrl = `${API_BASE_URL}/api/leads/export?${new URLSearchParams({ keyword, location })}`;
@@ -75,8 +76,8 @@ export function LeadGroupDetail({ keyword, location, onBack }: Props) {
               onToggleEmailOnly={() => setEmailOnly((v) => !v)}
               newOnly={newOnly}
               onToggleNewOnly={() => setNewOnly((v) => !v)}
-              sortAZ={sortAZ}
-              onToggleSortAZ={() => setSortAZ((v) => !v)}
+              sortMode={sortMode}
+              onSetSortMode={setSortMode}
               exportUrl={exportUrl}
             />
           </div>

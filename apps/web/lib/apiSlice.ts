@@ -11,6 +11,13 @@ export const api = createApi({
     createSearch: builder.mutation<{ searchId: string }, { keyword: string; location: string } | { goal: string }>({
       query: (body) => ({ url: "/api/search", method: "POST", body }),
     }),
+    // Enriches an existing list of businesses (name + website) with email,
+    // phone, etc. — see pipeline.ts's runCsvImportPipeline. Creates a search
+    // the same way createSearch does, just from an uploaded file instead of
+    // a keyword/goal, so it's polled identically once it returns a searchId.
+    importSearchCsv: builder.mutation<{ searchId: string; rowCount: number }, { csv: string; label?: string }>({
+      query: (body) => ({ url: "/api/search/import", method: "POST", body }),
+    }),
     getSearchStatus: builder.query<SearchRecord, string>({
       query: (id) => `/api/search/${id}`,
       providesTags: (_result, _err, id) => [{ type: "Search", id }],
@@ -92,6 +99,7 @@ export const api = createApi({
 
 export const {
   useCreateSearchMutation,
+  useImportSearchCsvMutation,
   useGetSearchStatusQuery,
   useGetSearchResultsQuery,
   useGetLeadGroupsQuery,

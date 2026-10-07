@@ -150,6 +150,33 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
+// logoUrl is extracted directly from the business's own site (its favicon/
+// apple-touch-icon — see the API's scrape.ts) and was never verified
+// reachable at scrape time, so this falls back to the same initials avatar
+// used when there's no logo at all if the image 404s or fails to load.
+function LeadAvatar({ businessName, logoUrl }: { businessName: string; logoUrl: string | null }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (logoUrl && !imgFailed) {
+    return (
+      <img
+        src={logoUrl}
+        alt=""
+        onError={() => setImgFailed(true)}
+        className="h-11 w-11 shrink-0 rounded-xl bg-slate-800 object-contain p-1.5 ring-1 ring-white/10"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-semibold ${avatarGradient(businessName)}`}
+    >
+      {initials(businessName)}
+    </div>
+  );
+}
+
 function domainOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -162,28 +189,35 @@ function domainOf(url: string): string {
 // real mailbox check — see the API's verifyEmail.ts); false = domain
 // confirmed dead/nonexistent; undefined = not applicable (e.g. phone
 // numbers) or no verification was ever run for this field.
+// roleBased: folded into the tooltip rather than its own badge, to avoid
+// re-cluttering the card with another visual element — true = looks like a
+// shared inbox (info@, contact@), false = looks like it may reach a named
+// person directly (tends to get a better response), null/undefined = n/a.
 function CopyableField({
   icon: Icon,
   value,
   tone,
   verified,
+  roleBased,
 }: {
   icon: typeof Phone;
   value: string;
   tone: string;
   verified?: boolean | null;
+  roleBased?: boolean | null;
 }) {
   const [copied, setCopied] = useState(false);
+  const title = [
+    "Click to copy",
+    verified === true ? "domain verified" : verified === false ? "domain does not appear to accept mail" : null,
+    roleBased === true ? "shared inbox, not a named person" : roleBased === false ? "may reach a named person directly" : null,
+  ]
+    .filter(Boolean)
+    .join(" — ");
   return (
     <button
       type="button"
-      title={
-        verified === true
-          ? "Click to copy — domain verified"
-          : verified === false
-            ? "Click to copy — domain does not appear to accept mail"
-            : "Click to copy"
-      }
+      title={title}
       onClick={async (e) => {
         e.stopPropagation();
         try {
@@ -242,14 +276,7 @@ export function LeadCards({ leads, qualifications }: Props) {
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-1 items-start gap-3.5">
-              {/* Monogram avatar */}
-              <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-semibold ${avatarGradient(
-                  lead.businessName
-                )}`}
-              >
-                {initials(lead.businessName)}
-              </div>
+              <LeadAvatar businessName={lead.businessName} logoUrl={lead.logoUrl} />
 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -285,7 +312,13 @@ export function LeadCards({ leads, qualifications }: Props) {
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5 -ml-2">
                   {lead.phone && <CopyableField icon={Phone} value={lead.phone} tone="text-slate-300" />}
                   {lead.email && (
-                    <CopyableField icon={Mail} value={lead.email} tone="text-cyan-300" verified={lead.emailVerified} />
+                    <CopyableField
+                      icon={Mail}
+                      value={lead.email}
+                      tone="text-cyan-300"
+                      verified={lead.emailVerified}
+                      roleBased={lead.isRoleBasedEmail}
+                    />
                   )}
                   <span className="inline-flex items-center gap-1 rounded-lg bg-slate-800/70 px-2 py-1 text-[11px] text-slate-500">
                     <ShieldCheck className="h-3 w-3 shrink-0" aria-hidden />

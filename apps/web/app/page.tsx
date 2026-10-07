@@ -13,6 +13,7 @@ import { LeadGroupDetail } from "@/components/LeadGroupDetail";
 import { QualifyPanel } from "@/components/QualifyPanel";
 import {
   useCreateSearchMutation,
+  useImportSearchCsvMutation,
   useGetSearchStatusQuery,
   useGetSearchResultsQuery,
 } from "@/lib/apiSlice";
@@ -42,8 +43,13 @@ export default function Home() {
   const [qualifications, setQualifications] = useState<Record<string, LeadQualification>>({});
 
   const [createSearch, { isLoading: isCreating }] = useCreateSearchMutation();
+  const [importSearchCsv, { isLoading: isImporting }] = useImportSearchCsvMutation();
 
-  const { data: status } = useGetSearchStatusQuery(searchId!, {
+  const {
+    data: status,
+    isError: statusFetchFailed,
+    refetch: refetchStatus,
+  } = useGetSearchStatusQuery(searchId!, {
     skip: !searchId,
     pollingInterval: 1500,
     skipPollingIfUnfocused: true,
@@ -67,9 +73,19 @@ export default function Home() {
   // Still gated on `searchId` so this doesn't disable the form before any
   // search has been started — otherwise the inputs are permanently disabled
   // on page load.
+  //
+  // statusFetchFailed guards a THIRD trap, found live: if a poll never
+  // successfully resolves for this searchId at all (e.g. a transient
+  // disconnect right as the search was created), `status` stays undefined
+  // forever and looked identical to "still in progress" — the UI showed a
+  // permanently-spinning status panel even after the search had actually
+  // completed on the backend. Surfaced instead as a visible, recoverable
+  // error rather than an indefinite spinner.
   const statusMatchesCurrentSearch = status?.id === searchId;
   const isInProgress =
-    !!searchId && (!statusMatchesCurrentSearch || IN_PROGRESS_STATUSES.has(status!.status));
+    !!searchId &&
+    !statusFetchFailed &&
+    (!statusMatchesCurrentSearch || IN_PROGRESS_STATUSES.has(status!.status));
 
   // Poll results continuously WHILE a search is running, not just once at
   // the end — the backend already inserts each lead the moment it's found,
@@ -110,6 +126,18 @@ export default function Home() {
     }
   }
 
+  async function handleImportCsv(csv: string, label: string) {
+    setCreateError(null);
+    setSearchId(null);
+    setQualifications({});
+    try {
+      const res = await importSearchCsv({ csv, label: label || undefined }).unwrap();
+      setSearchId(res.searchId);
+    } catch (err) {
+      setCreateError(extractErrorMessage(err));
+    }
+  }
+
   function runExample(example: (typeof EXAMPLES)[number]) {
     setKeyword(example.keyword);
     setLocation(example.location);
@@ -125,8 +153,9 @@ export default function Home() {
     !!resultsData &&
     (resultsData.leads.length > 0 || (statusMatchesCurrentSearch && status?.status === "completed"));
 
-  const { visibleLeads, emailOnly, setEmailOnly, newOnly, setNewOnly, sortAZ, setSortAZ } = useLeadFilters(
-    resultsMatchCurrentSearch ? (resultsData?.leads ?? []) : []
+  const { visibleLeads, emailOnly, setEmailOnly, newOnly, setNewOnly, sortMode, setSortMode } = useLeadFilters(
+    resultsMatchCurrentSearch ? (resultsData?.leads ?? []) : [],
+    qualifications
   );
 
   return (
@@ -197,7 +226,8 @@ export default function Home() {
                   goal={goal}
                   onGoalChange={setGoal}
                   onSearchGoal={handleSearchGoal}
-                  isLoading={isCreating || isInProgress}
+                  onImportCsv={handleImportCsv}
+                  isLoading={isCreating || isImporting || isInProgress}
                 />
                 {searchMode === "exact" && (
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -233,19 +263,48 @@ export default function Home() {
 
             {statusMatchesCurrentSearch && status && <StatusPanel status={status} />}
 
+            {searchId && statusFetchFailed && (
+              <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl bg-amber-950/30 p-4 ring-1 ring-amber-500/30">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+                  <div>
+                    <p className="font-medium text-amber-300">Lost track of this search's progress</p>
+                    <p className="mt-1 text-sm text-amber-400/80">
+                      It may have already finished — the connection to check just failed.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refetchStatus()}
+                  className="shrink-0 rounded-lg bg-amber-500/15 px-3 py-1.5 text-sm font-medium text-amber-300 transition hover:bg-amber-500/25"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             {showResults && (
               <div className="mt-6 space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-sm font-medium text-slate-500">
-                    Results for <span className="text-slate-200">"{resultsData.search.keyword}"</span> in{" "}
-                    <span className="text-slate-200">{resultsData.search.location}</span>
-                    {resultsData.search.goal && (
-                      <span className="ml-1.5 text-slate-600">(from: "{resultsData.search.goal}")</span>
+                    {resultsData.search.location === "CSV Import" ? (
+                      <>
+                        Imported list: <span className="text-slate-200">"{resultsData.search.keyword}"</span>
+                      </>
+                    ) : (
+                      <>
+                        Results for <span className="text-slate-200">"{resultsData.search.keyword}"</span> in{" "}
+                        <span className="text-slate-200">{resultsData.search.location}</span>
+                        {resultsData.search.goal && (
+                          <span className="ml-1.5 text-slate-600">(from: "{resultsData.search.goal}")</span>
+                        )}
+                      </>
                     )}
                     {isInProgress && (
                       <span className="ml-2 inline-flex items-center gap-1.5 font-mono text-[11px] text-teal-400">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-400" />
-                        still searching — more may appear
+                        still working — more may appear
                       </span>
                     )}
                   </h2>
@@ -254,8 +313,8 @@ export default function Home() {
                     onToggleEmailOnly={() => setEmailOnly((v) => !v)}
                     newOnly={newOnly}
                     onToggleNewOnly={() => setNewOnly((v) => !v)}
-                    sortAZ={sortAZ}
-                    onToggleSortAZ={() => setSortAZ((v) => !v)}
+                    sortMode={sortMode}
+                    onSetSortMode={setSortMode}
                     exportUrl={`${API_BASE_URL}/api/search/${searchId}/export`}
                   />
                 </div>

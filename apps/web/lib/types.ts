@@ -60,11 +60,19 @@ export interface Lead {
   // check) — null means no email, or the check was inconclusive. Not a real
   // SMTP mailbox check; see the API's verifyEmail.ts for why.
   emailVerified: boolean | null;
+  // Whether the email looks like a shared/generic inbox (info@, contact@)
+  // rather than a named person — null means no email, or it wasn't even a
+  // plausible address. See the API's lib/email.ts isRoleBasedEmail.
+  isRoleBasedEmail: boolean | null;
   website: string | null;
   description: string | null;
   ownerName: string | null;
   ownerTitle: string | null;
   socialLinks: SocialLinks | null;
+  // The business's own favicon/apple-touch-icon URL, used as a stand-in
+  // logo — extracted directly from its site, not a third-party logo API.
+  // Not verified reachable; falls back to an initials avatar if it 404s.
+  logoUrl: string | null;
   latitude: number | null;
   longitude: number | null;
   // Google's stable per-business Place ID — set only when this lead's
