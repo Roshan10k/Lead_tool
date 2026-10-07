@@ -15,6 +15,7 @@ const CSV_COLUMNS = [
   "phone",
   "email",
   "emailVerified",
+  "isRoleBasedEmail",
   "website",
   "facebook",
   "instagram",
@@ -42,6 +43,7 @@ function leadToCsvRow(lead: Lead): Record<(typeof CSV_COLUMNS)[number], string> 
     // "DNS lookup was inconclusive" (see verifyEmail.ts), neither of which
     // should be conflated with a confirmed "no" (false).
     emailVerified: lead.emailVerified === null ? "" : String(lead.emailVerified),
+    isRoleBasedEmail: lead.isRoleBasedEmail === null ? "" : String(lead.isRoleBasedEmail),
     website: lead.website ?? "",
     facebook: lead.socialLinks?.facebook ?? "",
     instagram: lead.socialLinks?.instagram ?? "",

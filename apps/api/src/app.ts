@@ -3,22 +3,17 @@ import { cors } from "@elysiajs/cors";
 import { eq, and, inArray, desc, sql, getTableColumns } from "drizzle-orm";
 import { db } from "./db/client";
 import { searches, leads, excludedDomains, qualificationJobs, leadQualifications } from "./db/schema";
-import { runSearchPipeline, runAgentSearchPipeline } from "./services/pipeline";
+import { runSearchPipeline, runAgentSearchPipeline, runCsvImportPipeline } from "./services/pipeline";
 import { runQualificationJob, normalizeOffering } from "./services/qualifyLeads";
 import { leadsToCsv } from "./lib/csv";
+import { parseCsvLine, parseCompanyListCsv } from "./lib/csvImport";
 import { extractDomain } from "./lib/domain";
+import type { CandidateUrl } from "./types";
 
 // Column names recognized when importing an exclusion list — a CRM export's
 // column naming isn't standardized, so a handful of common variants are
 // matched (case-insensitively) against the header row.
 const EXCLUSION_COLUMN_NAMES = ["website", "domain", "url", "email", "company website", "site"];
-
-// Minimal CSV cell split — handles simple quoted fields. Domain/email/URL
-// values aren't expected to contain embedded commas, so this doesn't need
-// full RFC 4180 quoting support the way a general CSV parser would.
-function parseCsvLine(line: string): string[] {
-  return line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""));
-}
 
 // A (keyword, location) group is matched by exact, normalized (trimmed,
 // lowercased) text — same philosophy as the dedup exclusion set in
@@ -105,6 +100,45 @@ export const app = new Elysia()
         }),
       ]),
     }
+  )
+
+  // Enrich an existing list of businesses (name + website) with email,
+  // phone, and the rest of what the normal pipeline extracts — for someone
+  // who already has their own company list and just wants it filled in,
+  // rather than discovering new businesses. Reuses the exact same scrape ->
+  // extract -> verify -> store path a Places-sourced search candidate goes
+  // through (see pipeline.ts's processCandidates), just skipping discovery
+  // entirely since the candidates are already known. Accepts raw CSV text,
+  // same as /api/exclusions/import, to avoid multipart form parsing.
+  .post(
+    "/api/search/import",
+    async ({ body, set }) => {
+      const label = body.label?.trim() || "Imported companies";
+      const rows = parseCompanyListCsv(body.csv);
+
+      if (rows.length === 0) {
+        set.status = 400;
+        return { error: "No usable rows found — make sure the file has a website/url column." };
+      }
+
+      const candidates: CandidateUrl[] = rows.map((row) => ({
+        url: row.website,
+        title: row.businessName,
+        knownBusinessName: row.businessName,
+        knownWebsite: row.website,
+      }));
+
+      // location is a fixed marker (not a real place) so every CSV import
+      // groups together under "CSV Import" in the All Leads view, with the
+      // label distinguishing separate imports the same way keyword does for
+      // a real search.
+      const [search] = await db.insert(searches).values({ keyword: label, location: "CSV Import" }).returning();
+
+      runCsvImportPipeline(search.id, candidates);
+
+      return { searchId: search.id, rowCount: rows.length };
+    },
+    { body: t.Object({ csv: t.String(), label: t.Optional(t.String()) }) }
   )
 
   // Poll search status/progress.

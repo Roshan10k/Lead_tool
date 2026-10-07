@@ -88,6 +88,30 @@ beforeAll(() => {
           { headers: { "content-type": "text/html" } }
         );
       }
+      if (url.pathname === "/logo-multiple-icons") {
+        return new Response(
+          `<html><head><title>Clean Co</title>
+            <link rel="icon" href="/favicon-32x32.png" sizes="32x32" />
+            <link rel="icon" href="/favicon-192x192.png" sizes="192x192" />
+            <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+          </head><body>Welcome to Clean Co.</body></html>`,
+          { headers: { "content-type": "text/html" } }
+        );
+      }
+      if (url.pathname === "/logo-relative-path") {
+        return new Response(
+          `<html><head><title>Clean Co</title>
+            <link rel="shortcut icon" href="images/favicon.ico" />
+          </head><body>Welcome to Clean Co.</body></html>`,
+          { headers: { "content-type": "text/html" } }
+        );
+      }
+      if (url.pathname === "/logo-none-declared") {
+        return new Response(
+          `<html><head><title>Clean Co</title></head><body>Welcome to Clean Co, no icon links at all.</body></html>`,
+          { headers: { "content-type": "text/html" } }
+        );
+      }
       if (url.pathname === "/not-found") {
         return new Response("nope", { status: 404 });
       }
@@ -182,5 +206,22 @@ describe("scrapePage Cloudflare email-obfuscation decoding", () => {
   test("returns null for malformed data-cfemail hex rather than throwing", async () => {
     const page = await scrapePage(`${server.url}cloudflare-email-malformed`);
     expect(page?.pageEmail).toBeNull();
+  });
+});
+
+describe("scrapePage logo (favicon) extraction", () => {
+  test("prefers apple-touch-icon over a same-or-larger regular icon", async () => {
+    const page = await scrapePage(`${server.url}logo-multiple-icons`);
+    expect(page?.logoUrl).toBe(`${server.url}apple-touch-icon-180x180.png`);
+  });
+
+  test("resolves a relative icon href against the page's own URL", async () => {
+    const page = await scrapePage(`${server.url}logo-relative-path`);
+    expect(page?.logoUrl).toBe(`${server.url}images/favicon.ico`);
+  });
+
+  test("falls back to the /favicon.ico convention when no icon <link> is declared at all", async () => {
+    const page = await scrapePage(`${server.url}logo-none-declared`);
+    expect(page?.logoUrl).toBe(`${server.url}favicon.ico`);
   });
 });

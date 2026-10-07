@@ -4,7 +4,7 @@ import type { ChatCompletion, ChatCompletionCreateParamsNonStreaming } from "ope
 import type { ScrapedPage } from "./scrape";
 
 function fakePage(overrides: Partial<ScrapedPage> = {}): ScrapedPage {
-  return { url: "https://clean-co.example", title: "Clean Co", text: "some page text", socialLinks: {}, pageEmail: null, ...overrides };
+  return { url: "https://clean-co.example", title: "Clean Co", text: "some page text", socialLinks: {}, pageEmail: null, logoUrl: null, ...overrides };
 }
 
 function completionWith(content: string): ChatCompletion {
@@ -87,10 +87,11 @@ describe("leadSchema (full extraction, DuckDuckGo path)", () => {
   });
 });
 
-describe("contactDetailsSchema (Places path — email/description/owner only)", () => {
-  test("accepts an email, description, and owner details", () => {
+describe("contactDetailsSchema (Places/CSV path — email/phone/description/owner only)", () => {
+  test("accepts an email, phone, description, and owner details", () => {
     const result = contactDetailsSchema.safeParse({
       email: "info@clean-co.com.au",
+      phone: "+61 2 9189 4164",
       description: "Commercial cleaning in Sydney.",
       ownerName: "Jane Smith",
       ownerTitle: "Founder",
@@ -101,6 +102,7 @@ describe("contactDetailsSchema (Places path — email/description/owner only)", 
   test("accepts nulls when nothing was found on the page", () => {
     const result = contactDetailsSchema.safeParse({
       email: null,
+      phone: null,
       description: null,
       ownerName: null,
       ownerTitle: null,
@@ -128,16 +130,29 @@ describe("contactDetailsSchema (Places path — email/description/owner only)", 
 describe("extractContactDetails filters implausible emails from the LLM", () => {
   test("passes through a well-formed email unchanged", async () => {
     const createCompletion = async (_p: ChatCompletionCreateParamsNonStreaming) =>
-      completionWith(JSON.stringify({ email: "info@clean-co.example", description: null, ownerName: null, ownerTitle: null }));
+      completionWith(
+        JSON.stringify({ email: "info@clean-co.example", phone: null, description: null, ownerName: null, ownerTitle: null })
+      );
     const result = await extractContactDetails(fakePage(), createCompletion);
     expect(result?.email).toBe("info@clean-co.example");
   });
 
   test("nulls out Cloudflare's obfuscation placeholder text", async () => {
     const createCompletion = async () =>
-      completionWith(JSON.stringify({ email: "[email protected]", description: null, ownerName: null, ownerTitle: null }));
+      completionWith(
+        JSON.stringify({ email: "[email protected]", phone: null, description: null, ownerName: null, ownerTitle: null })
+      );
     const result = await extractContactDetails(fakePage(), createCompletion);
     expect(result?.email).toBeNull();
+  });
+
+  test("extracts a phone number from the page text", async () => {
+    const createCompletion = async () =>
+      completionWith(
+        JSON.stringify({ email: null, phone: "+61 2 9189 4164", description: null, ownerName: null, ownerTitle: null })
+      );
+    const result = await extractContactDetails(fakePage(), createCompletion);
+    expect(result?.phone).toBe("+61 2 9189 4164");
   });
 });
 

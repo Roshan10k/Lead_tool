@@ -101,6 +101,12 @@ export async function extractLead(
 
 export const contactDetailsSchema = z.object({
   email: z.string().nullable(),
+  // Phone isn't in Serper Places' structured data in every case (and a
+  // CSV-imported candidate — see pipeline.ts's CSV import path — never has
+  // it at all), so this is extracted the same way email is: from whatever
+  // the business's own site actually publishes, as a fallback/supplement to
+  // any structured source.
+  phone: z.string().nullable(),
   description: z.string().nullable(),
   ownerName: z.string().nullable(),
   ownerTitle: z.string().nullable(),
@@ -109,6 +115,7 @@ export const contactDetailsSchema = z.object({
 const CONTACT_DETAILS_SYSTEM_PROMPT = `You are given the text of a business's own website. Extract only:
 {
   "email": string | null,       // a contact email address, if present in the text
+  "phone": string | null,       // a contact phone number, if present in the text
   "description": string | null, // one short sentence describing what the business does
   "ownerName": string | null,   // name of the owner, founder, director, or a named contact person, if mentioned
   "ownerTitle": string | null   // that person's role/title (e.g. "Owner", "Founder", "Director"), if mentioned
@@ -116,11 +123,10 @@ const CONTACT_DETAILS_SYSTEM_PROMPT = `You are given the text of a business's ow
 Return ONLY the JSON object, no prose, no markdown fences. If a field is not present, use null. Never invent information.`;
 
 /**
- * Used for candidates that already came from a structured discovery source
- * (Serper Places) with a known business identity — we don't need the LLM to
- * judge whether the page is a business listing, only to pull out the details
- * Maps data doesn't include: email, description, and — where the site names
- * one — the owner/contact person and their title.
+ * Used for candidates whose business identity is already known (Serper
+ * Places, or a CSV-imported business name+website — see pipeline.ts) — we
+ * don't need the LLM to judge whether the page is a business listing, only
+ * to pull out contact details the known source didn't already provide.
  */
 export async function extractContactDetails(
   page: ScrapedPage,

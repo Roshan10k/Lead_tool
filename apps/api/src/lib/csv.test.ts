@@ -11,11 +11,13 @@ function fakeLead(overrides: Partial<Lead> = {}): Lead {
     phone: "+61 2 9189 4164",
     email: "info@clean-co.com.au",
     emailVerified: true,
+    isRoleBasedEmail: true,
     website: "https://commercial-cleaning.com.au",
     description: "Commercial cleaning in Sydney.",
     ownerName: null,
     ownerTitle: null,
     socialLinks: null,
+    logoUrl: null,
     latitude: null,
     longitude: null,
     placeId: null,
@@ -53,7 +55,7 @@ describe("leadsToCsv", () => {
   test("header includes owner, social, and geo columns", () => {
     const csv = leadsToCsv([]);
     expect(csv).toBe(
-      "businessName,ownerName,ownerTitle,location,phone,email,emailVerified,website,facebook,instagram,linkedin,twitter,description,outreachStatus,notes,latitude,longitude,sourceUrl"
+      "businessName,ownerName,ownerTitle,location,phone,email,emailVerified,isRoleBasedEmail,website,facebook,instagram,linkedin,twitter,description,outreachStatus,notes,latitude,longitude,sourceUrl"
     );
   });
 
@@ -98,6 +100,17 @@ describe("leadsToCsv", () => {
     expect(unverifiedCsv.split("\n")[1]).toContain("false");
 
     const unknownCsv = leadsToCsv([fakeLead({ emailVerified: null })]);
+    expect(unknownCsv).not.toContain("null");
+  });
+
+  test("isRoleBasedEmail renders as true/false, and null as empty rather than 'null'", () => {
+    const roleCsv = leadsToCsv([fakeLead({ isRoleBasedEmail: true })]);
+    expect(roleCsv.split("\n")[1]).toContain("true");
+
+    const personalCsv = leadsToCsv([fakeLead({ isRoleBasedEmail: false })]);
+    expect(personalCsv.split("\n")[1]).toContain("false");
+
+    const unknownCsv = leadsToCsv([fakeLead({ isRoleBasedEmail: null })]);
     expect(unknownCsv).not.toContain("null");
   });
 });

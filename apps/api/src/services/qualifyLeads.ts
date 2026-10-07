@@ -62,7 +62,16 @@ reasoning is one sentence, grounded only in the facts given.`;
 
 type LeadFacts = Pick<
   Lead,
-  "businessName" | "description" | "location" | "website" | "email" | "phone" | "socialLinks" | "ownerName" | "ownerTitle"
+  | "businessName"
+  | "description"
+  | "location"
+  | "website"
+  | "email"
+  | "isRoleBasedEmail"
+  | "phone"
+  | "socialLinks"
+  | "ownerName"
+  | "ownerTitle"
 >;
 
 function summarizeLeadFacts(lead: LeadFacts): string {
@@ -74,6 +83,9 @@ function summarizeLeadFacts(lead: LeadFacts): string {
     `Description: ${lead.description ?? "(none available)"}`,
     `Has a website: ${lead.website ? "yes" : "no"}`,
     `Has a public email listed: ${lead.email ? "yes" : "no"}`,
+    lead.email
+      ? `Email type: ${lead.isRoleBasedEmail ? "a shared/general inbox (e.g. info@), not a named person" : "looks like it may belong to a named person"}`
+      : null,
     `Has a phone number listed: ${lead.phone ? "yes" : "no"}`,
     `Social media presence: ${socials.length ? socials.join(", ") : "none found"}`,
   ]

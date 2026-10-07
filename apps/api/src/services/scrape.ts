@@ -16,6 +16,11 @@ export interface ScrapedPage {
   // exists: both cases involve markup an LLM given only visible text can
   // never see the real value of.
   pageEmail: string | null;
+  // The business's own favicon/apple-touch-icon URL, used as a stand-in
+  // logo — see extractLogoUrl. Not verified reachable at scrape time; the
+  // frontend falls back to an initials avatar if it 404s when the browser
+  // actually loads it.
+  logoUrl: string | null;
 }
 
 // Matches a business's own social media page links, not e.g. Facebook's own
@@ -134,6 +139,48 @@ function extractPageEmail($: CheerioAPI): string | null {
   return extractMailtoEmail($) ?? extractCloudflareEmail($);
 }
 
+const ICON_LINK_SELECTOR =
+  "link[rel='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon'], link[rel='apple-touch-icon-precomposed']";
+
+/**
+ * Picks the business's favicon/apple-touch-icon as a stand-in logo — checked
+ * live against real business sites: these are frequently a genuine shrunk
+ * logo, not a generic placeholder (one real site's icon file was literally
+ * named "...-Logo-Domestic-roundal-192x192.avif"). Prefers apple-touch-icon
+ * (usually a cleaner square crop meant to look good at a larger size) and
+ * the largest declared `sizes=`, falling back to the near-universal
+ * `/favicon.ico` convention when a page declares no icon `<link>` at all.
+ */
+function extractLogoUrl($: CheerioAPI, pageUrl: string): string | null {
+  let base: URL;
+  try {
+    base = new URL(pageUrl);
+  } catch {
+    return null;
+  }
+
+  const candidates: { url: string; score: number }[] = [];
+  $(ICON_LINK_SELECTOR).each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href) return;
+    let resolved: string;
+    try {
+      resolved = new URL(href, base).toString();
+    } catch {
+      return;
+    }
+
+    const rel = ($(el).attr("rel") ?? "").toLowerCase();
+    const isAppleTouch = rel.includes("apple-touch-icon");
+    const sizeMatch = ($(el).attr("sizes") ?? "").match(/(\d+)x\d+/i);
+    const size = sizeMatch ? parseInt(sizeMatch[1], 10) : 0;
+    candidates.push({ url: resolved, score: size + (isAppleTouch ? 1000 : 0) });
+  });
+
+  if (candidates.length === 0) return `${base.origin}/favicon.ico`;
+  return candidates.reduce((a, b) => (b.score > a.score ? b : a)).url;
+}
+
 /**
  * Fetches a public page and reduces it to visible text. Deliberately simple —
  * no headless browser, no JS rendering — which is enough for most business
@@ -161,6 +208,7 @@ export async function scrapePage(url: string): Promise<ScrapedPage | null> {
 
     const socialLinks = extractSocialLinks($);
     const pageEmail = extractPageEmail($);
+    const logoUrl = extractLogoUrl($, url);
 
     $("script, style, noscript, svg, nav, footer").remove();
 
@@ -168,7 +216,7 @@ export async function scrapePage(url: string): Promise<ScrapedPage | null> {
     const text = $("body").text().replace(/\s+/g, " ").trim().slice(0, MAX_TEXT_LENGTH);
 
     if (!text) return null;
-    return { url, title, text, socialLinks, pageEmail };
+    return { url, title, text, socialLinks, pageEmail, logoUrl };
   } catch {
     // Failed/timed-out page — the pipeline treats this as a skip, not a fatal error.
     return null;

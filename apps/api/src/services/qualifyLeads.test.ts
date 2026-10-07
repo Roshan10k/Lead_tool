@@ -5,7 +5,16 @@ import type { Lead } from "../db/schema";
 
 function fakeLead(overrides: Partial<Lead> = {}): Pick<
   Lead,
-  "businessName" | "description" | "location" | "website" | "email" | "phone" | "socialLinks" | "ownerName" | "ownerTitle"
+  | "businessName"
+  | "description"
+  | "location"
+  | "website"
+  | "email"
+  | "isRoleBasedEmail"
+  | "phone"
+  | "socialLinks"
+  | "ownerName"
+  | "ownerTitle"
 > {
   return {
     businessName: "Clean Co",
@@ -13,6 +22,7 @@ function fakeLead(overrides: Partial<Lead> = {}): Pick<
     location: "Sydney NSW",
     website: null,
     email: null,
+    isRoleBasedEmail: null,
     phone: "+61 2 9189 4164",
     socialLinks: {},
     ownerName: null,

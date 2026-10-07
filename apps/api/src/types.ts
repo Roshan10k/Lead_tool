@@ -28,9 +28,10 @@ export interface ExtractedLead {
   ownerTitle: string | null;
 }
 
-/** The narrower extraction result used for structured (Places) candidates. */
+/** The narrower extraction result used for structured (Places/CSV) candidates. */
 export interface ExtractedContactDetails {
   email: string | null;
+  phone: string | null;
   description: string | null;
   ownerName: string | null;
   ownerTitle: string | null;

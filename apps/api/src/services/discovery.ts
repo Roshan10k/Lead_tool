@@ -11,6 +11,20 @@ import type { CandidateUrl } from "../types";
 const MAX_CANDIDATES = Number(process.env.DISCOVERY_MAX_CANDIDATES ?? 8);
 const PLACES_PAGE_SIZE = 10;
 
+// Country-code bias for Serper's Places search (its `gl` param). Confirmed
+// live: for a genuinely ambiguous bare city name (e.g. "Cambridge" — UK vs.
+// Massachusetts, or "Birmingham" — UK vs. Alabama), Serper's own geocoding
+// is inconsistent — "Birmingham" alone returned a mix of UK and Alabama
+// results with no way to tell them apart. Passing `gl` measurably improved
+// this (Birmingham fully resolved to the UK) and does NOT override an
+// unambiguous, explicit location — "Toronto" and "Australia" still
+// correctly returned Toronto/Australia results with gl=gb set, so this is
+// only a tie-breaker for genuine ambiguity, not a hard region filter.
+// Configurable since this default only makes sense for this app's actual
+// usage pattern (mostly UK cities); a deployment searching elsewhere should
+// override it.
+const SERPER_COUNTRY_BIAS = process.env.SERPER_COUNTRY_BIAS ?? "gb";
+
 // Safety cap on how many Serper pages a single search will fetch while
 // hunting for candidates not already excluded (see excludePlaceIds below).
 // Without this, a keyword+location whose business pool is nearly exhausted
@@ -150,7 +164,13 @@ async function fetchSerperPlacesPageOnce(keyword: string, location: string, page
         "X-API-KEY": process.env.SERPER_API_KEY!,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ q: `${keyword} in ${location}`, location, num: PLACES_PAGE_SIZE, page }),
+      body: JSON.stringify({
+        q: `${keyword} in ${location}`,
+        location,
+        gl: SERPER_COUNTRY_BIAS,
+        num: PLACES_PAGE_SIZE,
+        page,
+      }),
       signal: controller.signal,
     });
   } catch (err) {

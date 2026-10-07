@@ -41,11 +41,25 @@ export const leads = pgTable("leads", {
   // the DNS lookup itself was inconclusive (never set to false just because
   // a lookup timed out — see verifyEmail.ts's null-vs-false distinction).
   emailVerified: boolean("email_verified"),
+  // Whether the email looks like a shared/generic inbox (info@, contact@)
+  // rather than a named person — a named contact tends to get a better
+  // outreach response than an inbox several people read, or none do. Null
+  // when there's no email, or it wasn't a plausible address to begin with.
+  // See lib/email.ts's isRoleBasedEmail for the (deliberately simple,
+  // non-LLM) heuristic.
+  isRoleBasedEmail: boolean("is_role_based_email"),
   website: text("website"),
   description: text("description"),
   ownerName: text("owner_name"),
   ownerTitle: text("owner_title"),
   socialLinks: jsonb("social_links").$type<SocialLinks>(),
+  // The business's own favicon/apple-touch-icon URL, used as a stand-in
+  // logo — extracted directly from the page we already scrape (see
+  // scrape.ts's extractLogoUrl), not a third-party logo API, so a lead's
+  // domain is never sent to an external service just to fetch an image for
+  // it. Not verified reachable at scrape time; the frontend falls back to
+  // an initials avatar if it 404s when the browser actually loads it.
+  logoUrl: text("logo_url"),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
   // Google's stable per-business Place ID (Serper Places' `cid`), null for

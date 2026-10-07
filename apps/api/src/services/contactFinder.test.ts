@@ -4,7 +4,7 @@ import type { ScrapedPage } from "./scrape";
 import type { ExtractedContactDetails } from "../types";
 
 function page(url: string, socialLinks: ScrapedPage["socialLinks"] = {}, pageEmail: string | null = null): ScrapedPage {
-  return { url, title: "Title", text: "text", socialLinks, pageEmail };
+  return { url, title: "Title", text: "text", socialLinks, pageEmail, logoUrl: null };
 }
 
 describe("findContactDetails", () => {
@@ -16,6 +16,7 @@ describe("findContactDetails", () => {
     };
     const extract = async (): Promise<ExtractedContactDetails> => ({
       email: "info@business.com",
+      phone: null,
       description: "A business.",
       ownerName: null,
       ownerTitle: null,
@@ -36,8 +37,8 @@ describe("findContactDetails", () => {
     };
     const extract = async (p: ScrapedPage): Promise<ExtractedContactDetails> =>
       p.url.endsWith("/contact")
-        ? { email: "sales@business.com", description: null, ownerName: "Jane Doe", ownerTitle: "Owner" }
-        : { email: null, description: "Homepage description.", ownerName: null, ownerTitle: null };
+        ? { email: "sales@business.com", phone: null, description: null, ownerName: "Jane Doe", ownerTitle: "Owner" }
+        : { email: null, phone: null, description: "Homepage description.", ownerName: null, ownerTitle: null };
 
     const result = await findContactDetails("https://business.com", scrape, extract);
 
@@ -57,6 +58,7 @@ describe("findContactDetails", () => {
     };
     const extract = async (): Promise<ExtractedContactDetails> => ({
       email: null,
+      phone: null,
       description: null,
       ownerName: null,
       ownerTitle: null,
@@ -83,8 +85,8 @@ describe("findContactDetails", () => {
     };
     const extract = async (p: ScrapedPage): Promise<ExtractedContactDetails> =>
       p.url.endsWith("/contact-us")
-        ? { email: "hello@business.com", description: null, ownerName: null, ownerTitle: null }
-        : { email: null, description: null, ownerName: null, ownerTitle: null };
+        ? { email: "hello@business.com", phone: null, description: null, ownerName: null, ownerTitle: null }
+        : { email: null, phone: null, description: null, ownerName: null, ownerTitle: null };
 
     const result = await findContactDetails("https://business.com", scrape, extract);
 
@@ -100,6 +102,7 @@ describe("findContactDetails", () => {
     const scrape = async () => null;
     const extract = async (): Promise<ExtractedContactDetails> => ({
       email: null,
+      phone: null,
       description: null,
       ownerName: null,
       ownerTitle: null,
@@ -119,6 +122,7 @@ describe("findContactDetails", () => {
     };
     const extract = async (): Promise<ExtractedContactDetails> => ({
       email: null,
+      phone: null,
       description: "Homepage description.",
       ownerName: null,
       ownerTitle: null,
@@ -139,6 +143,7 @@ describe("findContactDetails", () => {
     };
     const extract = async (): Promise<ExtractedContactDetails> => ({
       email: null,
+      phone: null,
       description: null,
       ownerName: null,
       ownerTitle: null,
@@ -150,6 +155,25 @@ describe("findContactDetails", () => {
     expect(result?.scrapedUrl).toBe("https://business.com/contact");
   });
 
+  test("keeps a phone number found on a fallback page even though that page didn't have the email", async () => {
+    const scrape = async (url: string) => {
+      if (url.endsWith("/contact")) return page(url);
+      return page(url);
+    };
+    const extract = async (p: ScrapedPage): Promise<ExtractedContactDetails> => {
+      if (p.url.endsWith("/contact")) {
+        return { email: "sales@business.com", phone: null, description: null, ownerName: null, ownerTitle: null };
+      }
+      // Homepage has no email (triggers the fallback loop) but does have a phone.
+      return { email: null, phone: "+61 2 9189 4164", description: null, ownerName: null, ownerTitle: null };
+    };
+
+    const result = await findContactDetails("https://business.com", scrape, extract);
+
+    expect(result?.contactDetails?.email).toBe("sales@business.com");
+    expect(result?.contactDetails?.phone).toBe("+61 2 9189 4164");
+  });
+
   test("merges social links picked up across homepage and fallback pages, even when no email is ever found", async () => {
     const scrape = async (url: string) => {
       if (url.endsWith("/contact")) return page(url, { instagram: "https://instagram.com/business" });
@@ -157,6 +181,7 @@ describe("findContactDetails", () => {
     };
     const extract = async (): Promise<ExtractedContactDetails> => ({
       email: null,
+      phone: null,
       description: null,
       ownerName: null,
       ownerTitle: null,
